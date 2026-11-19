@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Australia RTS Company — Secure Client Document Portal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #f1f5f9;
+      color: #0f172a;
+      overflow-x: hidden;
+    }
+    .protected-view {
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+    .hero-melbourne {
+      background-image: linear-gradient(135deg, rgba(10, 22, 48, 0.86) 0%, rgba(15, 35, 72, 0.76) 55%, rgba(12, 24, 52, 0.88) 100%),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 700'%3E%3Cdefs%3E%3ClinearGradient id='sky' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0%25' stop-color='%23071633'/%3E%3Cstop offset='55%25' stop-color='%230e2f6b'/%3E%3Cstop offset='100%25' stop-color='%231b4fa8'/%3E%3C/linearGradient%3E%3ClinearGradient id='water' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0%25' stop-color='%230c295c'/%3E%3Cstop offset='50%25' stop-color='%231855b8'/%3E%3Cstop offset='100%25' stop-color='%23081630'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1200' height='460' fill='url(%23sky)'/%3E%3Crect x='90' y='70' width='120' height='390' fill='%23142647'/%3E%3Crect x='230' y='130' width='105' height='330' fill='%231a2f57'/%3E%3Crect x='360' y='170' width='130' height='290' fill='%23122240'/%3E%3Crect x='620' y='150' width='140' height='310' fill='%23172b52'/%3E%3Crect x='790' y='190' width='120' height='270' fill='%23122240'/%3E%3Ccircle cx='280' cy='250' r='55' fill='%23b8c4d8' opacity='0.75'/%3E%3Cpath d='M 225 250 Q 280 185 335 250 Z' fill='%23dce5f2' opacity='0.8'/%3E%3Cpath d='M 320 445 Q 660 215 1040 445' stroke='%2360a5fa' stroke-width='14' fill='none'/%3E%3Cpath d='M 320 445 Q 660 215 1040 445' stroke='%23e0f2fe' stroke-width='4' fill='none'/%3E%3Cpolygon points='625,415 685,295 745,415' fill='none' stroke='%23f8fafc' stroke-width='9'/%3E%3Cline x1='120' y1='445' x2='1120' y2='445' stroke='%23cbd5e1' stroke-width='10'/%3E%3Crect y='460' width='1200' height='240' fill='url(%23water)'/%3E%3Cellipse cx='660' cy='535' rx='260' ry='28' fill='%233b82f6' opacity='0.35'/%3E%3C/svg%3E");
+      background-size: cover;
+      background-position: center;
+    }
+    @media print {
+      body * { display: none !important; }
+      body::after {
+        content: "PRINTING IS DISABLED FOR DOCUMENT SECURITY — AUSTRALIA RTS COMPANY";
+        display: block;
+        padding: 40px;
+        font-size: 20px;
+        font-weight: 700;
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Top Navigation Header -->
+  <header class="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0 cursor-pointer" onclick="switchView('client')">
+        <img id="headerLogoImg" alt="Australia RTS Company Logo" class="w-11 h-8 rounded object-cover border border-white/20 shrink-0 bg-slate-800" />
+        <div class="truncate">
+          <div id="headerCompanyName" class="font-bold text-sm sm:text-base tracking-tight text-white truncate">Australia RTS Company</div>
+          <div id="headerCompanyTagline" class="text-[11px] text-sky-300 truncate">Secure Client Document Vault</div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+        <span id="cloudStatusBadge" class="hidden md:inline-flex items-center gap-1.5 text-xs bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-full font-medium">
+          <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+          Cloud Sync Active
+        </span>
+        <button id="navClientBtn" onclick="switchView('client')" class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold bg-sky-600 text-white hover:bg-sky-500 transition">
+          Client Portal
+        </button>
+        <button id="navAdminBtn" onclick="openAdminGate()" class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700 transition">
+          Admin Panel
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+
+    <!-- ==================== CLIENT PORTAL VIEW ==================== -->
+    <section id="clientView" class="space-y-6">
+      <div id="verificationCard" class="max-w-xl mx-auto rounded-2xl shadow-xl border border-slate-200 overflow-hidden bg-white">
+        <div class="hero-melbourne px-6 py-8 text-white">
+          <div class="flex items-center gap-3.5 mb-4">
+            <img id="loginLogoImg" alt="Company Logo" class="w-14 h-10 rounded-md object-cover border border-white/30 shadow bg-slate-900 shrink-0" />
+            <div>
+              <p id="loginCompanyLabel" class="text-xs uppercase tracking-wider font-semibold text-sky-300">Australia RTS Company</p>
+              <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight text-white">Client Document Verification</h1>
+            </div>
+          </div>
+          <p class="text-xs sm:text-sm text-slate-200 leading-relaxed">
+            Verify your identity with your registered <strong class="text-white">Passport Number</strong> and <strong class="text-white">Mobile Number</strong> to view assigned documents from any device. Downloads, printing, and screen capture are strictly restricted.
+          </p>
+        </div>
+
+        <form id="verifyForm" onsubmit="handleClientVerify(event)" class="p-6 sm:p-8 space-y-4">
+          <div>
+            <label for="passportInput" class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+              Passport Number
+            </label>
+            <input
+              id="passportInput"
+              type="text"
+              required
+              placeholder="e.g., A12345678"
+              class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-sky-600 focus:ring-2 focus:ring-sky-600/20 outline-none text-sm font-medium uppercase"
+            />
+          </div>
+
+          <div>
+            <label for="mobileInput" class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+              Mobile Number
+            </label>
+            <input
+              id="mobileInput"
+              type="tel"
+              required
+              placeholder="e.g., 01711223344"
+              class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-sky-600 focus:ring-2 focus:ring-sky-600/20 outline-none text-sm font-medium"
+            />
+          </div>
+
+          <div id="verifyError" class="hidden rounded-xl bg-rose-50 border border-rose-200 text-rose-700 px-3.5 py-2.5 text-xs font-semibold"></div>
+
+          <button id="verifySubmitBtn" type="submit" class="w-full py-3 px-4 rounded-xl bg-sky-700 hover:bg-sky-800 text-white font-bold text-sm shadow-md transition">
+            Verify &amp; Access Documents
+          </button>
+
+          <div class="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+            <span>Demo credentials: <strong class="text-slate-700">A12345678</strong> / <strong class="text-slate-700">01711223344</strong></span>
+            <button type="button" onclick="fillDemoClient()" class="text-sky-700 font-semibold hover:underline">Fill Demo</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Verified Client Workspace -->
+      <div id="clientWorkspace" class="hidden space-y-6">
+        <div class="hero-melbourne rounded-2xl p-6 text-white shadow-lg flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div class="flex items-center gap-4">
+            <img id="workspaceLogoImg" alt="Company Logo" class="w-14 h-10 rounded-md object-cover border border-white/30 bg-slate-900 shrink-0" />
+            <div>
+              <div class="flex flex-wrap items-center gap-2">
+                <h2 id="clientFullName" class="text-xl font-extrabold text-white">Client Name</h2>
+                <span id="clientCaseStatus" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-400/20 text-emerald-200 border border-emerald-300/30">Active</span>
+              </div>
+              <p class="text-xs sm:text-sm text-sky-200 mt-1">
+                Passport: <strong id="clientPassportDisplay" class="text-white"></strong> &bull;
+                Mobile: <strong id="clientMobileDisplay" class="text-white"></strong> &bull;
+                Category: <strong id="clientCategoryDisplay" class="text-white"></strong>
+              </p>
+            </div>
+          </div>
+          <button onclick="logoutClient()" class="self-start md:self-auto px-4 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold border border-white/25 transition">
+            Sign Out
+          </button>
+        </div>
+
+        <div class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-900 flex items-start gap-2.5">
+          <span class="font-bold shrink-0">Security Notice:</span>
+          <span>All documents are watermarked with your identity and rendered in a protected viewer. Downloading, copying, printing, or switching away from this window triggers automatic protection.</span>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-base font-bold text-slate-900">Assigned Documents (<span id="clientDocCount">0</span>)</h3>
+          </div>
+          <div id="clientDocumentsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== ADMIN PIN GATE ==================== -->
+    <section id="adminPinSection" class="hidden max-w-md mx-auto bg-white rounded-2xl shadow-xl border border-slate-200 p-6 sm:p-8 space-y-5">
+      <div class="hero-melbourne -mx-6 -mt-6 sm:-mx-8 sm:-mt-8 px-6 py-6 rounded-t-2xl text-white">
+        <p class="text-[11px] uppercase tracking-wider font-semibold text-sky-300">Australia RTS Company</p>
+        <h2 class="text-xl font-extrabold mt-0.5">Admin Panel Authentication</h2>
+        <p class="text-xs text-slate-200 mt-1">Enter your administrator PIN to manage clients, upload documents, and update branding.</p>
+      </div>
+
+      <form id="adminPinForm" onsubmit="handleAdminPinSubmit(event)" class="space-y-4">
+        <div>
+          <label for="adminPinInput" class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+            Administrator PIN
+          </label>
+          <input
+            id="adminPinInput"
+            type="password"
+            inputmode="numeric"
+            required
+            placeholder="Enter PIN (default: 1234)"
+            class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-sky-600 focus:ring-2 focus:ring-sky-600/20 outline-none text-sm font-semibold tracking-widest"
+          />
+        </div>
+        <div id="adminPinError" class="hidden rounded-xl bg-rose-50 border border-rose-200 text-rose-700 px-3.5 py-2.5 text-xs font-semibold"></div>
+        <div class="flex gap-2.5">
+          <button type="submit" class="flex-1 py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold transition">
+            Unlock Admin Panel
+          </button>
+          <button type="button" onclick="switchView('client')" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold transition">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ==================== ADMIN DASHBOARD VIEW ==================== -->
+    <section id="adminDashboard" class="hidden space-y-6">
+      <div class="hero-melbourne rounded-2xl p-6 text-white shadow-lg flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div>
+          <p class="text-xs uppercase tracking-wider font-semibold text-sky-300">Administrator Control Center</p>
+          <h2 id="adminBannerTitle" class="text-2xl font-extrabold text-white mt-0.5">Australia RTS Company — Admin Panel</h2>
+          <p class="text-xs sm:text-sm text-slate-200 mt-1">Add clients, upload images or PDFs to Firebase Cloud, monitor access logs, and customize company branding &amp; PIN.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="exportDatabaseJSON()" class="px-3.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold border border-white/25 transition">
+            Export JSON Backup
+          </button>
+          <button onclick="lockAdminPanel()" class="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition">
+            Lock Panel
+          </button>
+        </div>
+      </div>
+
+      <!-- Admin Tabs -->
+      <div class="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
+        <button id="tabClientsBtn" onclick="switchAdminTab('clients')" class="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-sky-700 text-white">
+          Clients &amp; Documents
+        </button>
+        <button id="tabBrandingBtn" onclick="switchAdminTab('branding')" class="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">
+          Company Branding &amp; Security
+        </button>
+        <button id="tabLogsBtn" onclick="switchAdminTab('logs')" class="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">
+          Access Logs
+        </button>
+      </div>
+
+      <!-- TAB 1: CLIENTS & DOCUMENTS -->
+      <div id="adminTabClients" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div class="lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4 h-fit">
+          <h3 class="text-base font-extrabold text-slate-900">Add Client &amp; Assign Document</h3>
+
+          <form id="addClientDocForm" onsubmit="handleAddClientAndDoc(event)" class="space-y-3.5">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Client Full Name *</label>
+              <input id="newClientName" type="text" required placeholder="e.g., Tariqul Islam" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm outline-none focus:border-sky-600" />
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">Passport Number *</label>
+                <input id="newClientPassport" type="text" required placeholder="e.g., B98765432" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm uppercase outline-none focus:border-sky-600" />
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">Mobile Number *</label>
+                <input id="newClientMobile" type="tel" required placeholder="e.g., 01811000000" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm outline-none focus:border-sky-600" />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">Visa / Service Category</label>
+                <input id="newClientCategory" type="text" value="Subclass 500 / RTS File" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm outline-none focus:border-sky-600" />
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">Application Status</label>
+                <select id="newClientStatus" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm bg-white outline-none focus:border-sky-600">
+                  <option value="In Review">In Review</option>
+                  <option value="Approved">Approved</option>
+                  <option value="Action Required">Action Required</option>
+                  <option value="Pending">Pending</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="pt-2 border-t border-slate-100">
+              <label class="block text-xs font-bold text-slate-700 mb-1">Document Title</label>
+              <input id="newDocTitle" type="text" placeholder="e.g., Visa Grant / Offer Summary" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm outline-none focus:border-sky-600" />
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Upload Document File (JPG, PNG, WEBP, PDF)</label>
+              <input id="newDocFile" type="file" accept="image/png,image/jpeg,image/webp,application/pdf" class="w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-3.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100" />
+              <p class="text-[11px] text-slate-400 mt-1">Uploaded files are stored in Firebase so clients can view them from any mobile or browser.</p>
+            </div>
+
+            <div id="adminUploadStatus" class="hidden rounded-xl bg-sky-50 border border-sky-200 text-sky-800 px-3.5 py-2 text-xs font-semibold"></div>
+
+            <button id="saveClientDocBtn" type="submit" class="w-full py-2.5 px-4 rounded-xl bg-sky-700 hover:bg-sky-800 text-white text-sm font-bold shadow transition">
+              Save Client &amp; Document
+            </button>
+          </form>
+        </div>
+
+        <!-- Existing Clients List -->
+        <div class="lg:col-span-7 space-y-4">
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <h3 class="text-base font-extrabold text-slate-900">Registered Clients (<span id="adminClientCount">0</span>)</h3>
+              <button onclick="resetDemoData()" class="text-xs font-semibold text-rose-600 hover:underline">Reset Demo Data</button>
+            </div>
+            <div id="adminClientsList" class="space-y-4"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: BRANDING & SECURITY -->
+      <div id="adminTabBranding" class="hidden max-w-2xl bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5">
+        <h3 class="text-base font-extrabold text-slate-900">Company Branding &amp; Admin PIN</h3>
+
+        <form id="brandingSettingsForm" onsubmit="handleSaveBranding(event)" class="space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Company Name</label>
+            <input id="settingCompanyName" type="text" required class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-semibold outline-none focus:border-sky-600" />
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Portal Tagline</label>
+            <input id="settingCompanyTagline" type="text" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm outline-none focus:border-sky-600" />
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Replace Logo Image (Optional)</label>
+            <input id="settingLogoFile" type="file" accept="image/*" class="w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-3.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-800 hover:file:bg-slate-200" />
+            <p class="text-[11px] text-slate-500 mt-1">Default logo is already set to the Australian Flag corporate emblem.</p>
+          </div>
+
+          <div class="pt-3 border-t border-slate-100">
+            <label class="block text-xs font-bold text-slate-700 mb-1">New Admin PIN (4-8 digits)</label>
+            <input id="settingAdminPin" type="text" pattern="[0-9]{4,8}" placeholder="Leave blank to keep current PIN" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm outline-none focus:border-sky-600" />
+          </div>
+
+          <div id="brandingSaveNotice" class="hidden rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 px-3.5 py-2.5 text-xs font-semibold">
+            Settings saved to Firebase successfully!
+          </div>
+
+          <button type="submit" class="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold transition">
+            Save Branding &amp; Security Settings
+          </button>
+        </form>
+      </div>
+
+      <!-- TAB 3: ACCESS LOGS -->
+      <div id="adminTabLogs" class="hidden bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-base font-extrabold text-slate-900">Client Verification &amp; Document Access Logs</h3>
+          <button onclick="clearAccessLogs()" class="text-xs font-semibold text-rose-600 hover:underline">Clear Logs</button>
+        </div>
+        <div id="accessLogsList" class="divide-y divide-slate-100 text-xs"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-slate-900 text-slate-400 text-xs py-4 border-t border-slate-800 mt-auto">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <span>&copy; <span id="footerYear">2026</span> <strong id="footerCompanyName" class="text-slate-200">Australia RTS Company</strong>. All rights reserved.</span>
+      <span>Protected Client Document Portal &bull; View-Only Mode</span>
+    </div>
+  </footer>
+
+  <!-- ==================== PROTECTED DOCUMENT VIEWER MODAL ==================== -->
+  <div id="docViewerModal" class="hidden fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 protected-view" oncontextmenu="return false;">
+    <div class="bg-white rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl border border-slate-700 relative">
+      <div class="bg-slate-900 text-white px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <h3 id="viewerDocTitle" class="text-sm sm:text-base font-bold truncate">Document Preview</h3>
+          <p id="viewerDocMeta" class="text-[11px] text-sky-300 truncate"></p>
+        </div>
+        <button onclick="closeDocViewer()" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shrink-0">
+          Close Viewer
+        </button>
+      </div>
+
+      <div class="relative flex-1 overflow-auto bg-slate-800 flex items-center justify-center p-4">
+        <canvas id="secureDocCanvas" class="max-w-full h-auto rounded-lg shadow-lg bg-white"></canvas>
+
+        <div id="blurCurtain" class="hidden absolute inset-0 bg-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-center text-center p-6 text-white z-20">
+          <div class="w-12 h-12 rounded-full bg-rose-500/20 border border-rose-400/40 flex items-center justify-center text-rose-300 font-extrabold text-lg mb-3">!</div>
+          <h4 class="text-base sm:text-lg font-extrabold text-white">Screen Capture / Window Switch Detected</h4>
+          <p class="text-xs sm:text-sm text-slate-300 max-w-md mt-1.5">
+            For document confidentiality under <strong id="curtainCompanyName">Australia RTS Company</strong>, viewing is paused while focus leaves the window or capture shortcuts are pressed.
+          </p>
+          <button onclick="dismissBlurCurtain()" class="mt-4 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold">
+            Resume Protected Viewing
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-slate-100 px-4 sm:px-6 py-2.5 text-[11px] text-slate-600 flex items-center justify-between">
+        <span>Watermarked View-Only Session &bull; Downloads &amp; Printing Disabled</span>
+        <span id="viewerWatermarkStamp" class="font-semibold text-slate-700"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase Modular SDK + Cloud Sync Logic -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import {
+      getFirestore,
+      doc,
+      getDoc,
+      setDoc,
+      onSnapshot
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import {
+      getStorage,
+      ref,
+      uploadBytes,
+      getDownloadURL
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
+    const STORAGE_KEY = 'australia_rts_portal_v1';
+    const PORTAL_DOC_REF_PATH = ['portal_data', 'main_state'];
+
+    // Configured for Firebase project: australia-rts-company
+    const firebaseConfig = {
+      apiKey: "AIzaSyD3R0anfUxPmUpPFnBkAUlqO_StJu_Umd8",
+      authDomain: "australia-rts-company.firebaseapp.com",
+      projectId: "australia-rts-company",
+      storageBucket: "australia-rts-company.firebasestorage.app",
+      messagingSenderId: "564000922069",
+      appId: "1:564000922069:web:02f2344a032482c30d055c",
+      measurementId: "G-8QWB8YNTJ1"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const storage = getStorage(app);
+    const portalDocRef = doc(db, ...PORTAL_DOC_REF_PATH);
+
+    const DEFAULT_AUSTRALIA_FLAG_LOGO = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 60'%3E%3Crect width='120' height='60' fill='%2300008B'/%3E%3Cg%3E%3Crect width='60' height='30' fill='%2300008B'/%3E%3Cpath d='M0,0 L60,30 M60,0 L0,30' stroke='%23FFFFFF' stroke-width='6'/%3E%3Cpath d='M0,0 L60,30 M60,0 L0,30' stroke='%23CF142B' stroke-width='2.5'/%3E%3Cpath d='M30,0 V30 M0,15 H60' stroke='%23FFFFFF' stroke-width='10'/%3E%3Cpath d='M30,0 V30 M0,15 H60' stroke='%23CF142B' stroke-width='6'/%3E%3C/g%3E%3Cpolygon points='30,36 32.2,42.5 39,42.5 33.4,46.5 35.6,53 30,49 24.4,53 26.6,46.5 21,42.5 27.8,42.5' fill='%23FFFFFF'/%3E%3Cpolygon points='90,11 91.2,14.5 94.8,14.5 91.9,16.6 93.1,20 90,17.9 86.9,20 88.1,16.6 85.2,14.5 88.8,14.5' fill='%23FFFFFF'/%3E%3Cpolygon points='90,41 91.2,44.5 94.8,44.5 91.9,46.6 93.1,50 90,47.9 86.9,50 88.1,46.6 85.2,44.5 88.8,44.5' fill='%23FFFFFF'/%3E%3Cpolygon points='75,26 76.2,29.5 79.8,29.5 76.9,31.6 78.1,35 75,32.9 71.9,35 73.1,31.6 70.2,29.5 73.8,29
