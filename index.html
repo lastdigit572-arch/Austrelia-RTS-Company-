@@ -293,7 +293,7 @@
     </div>
   </div><script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
     import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
     if (window.pdfjsLib) {
@@ -350,6 +350,72 @@
       logs: []
     };
 
+    // --- Helper Utilities (All-in-One Fail-Safe Layer) ---
+    function withTimeout(promise, ms = 10000, timeoutMsg = 'Request timed out') {
+      let timer;
+      const timeoutPromise = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(timeoutMsg)), ms);
+      });
+      return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
+    }
+
+    function normalizePassport(val) {
+      return String(val || '').trim().toUpperCase().replace(/\s+/g, '');
+    }
+
+    function normalizePhoneKey(val) {
+      const digits = String(val || '').replace(/\D/g, '');
+      return digits.length >= 10 ? digits.slice(-10) : digits;
+    }
+
+    function phonesMatch(savedMobile, inputMobile) {
+      const rawA = String(savedMobile || '').trim();
+      const rawB = String(inputMobile || '').trim();
+      if (!rawA || !rawB) return false;
+      if (rawA === rawB) return true;
+      const keyA = normalizePhoneKey(rawA);
+      const keyB = normalizePhoneKey(rawB);
+      return keyA.length >= 8 && keyA === keyB;
+    }
+
+    function fileToDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function compressImageToDataUrl(file, maxDim = 1300, quality = 0.78) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Image read failed'));
+        reader.onload = () => {
+          const img = new Image();
+          img.onerror = () => resolve(reader.result);
+          img.onload = () => {
+            let { width, height } = img;
+            if (width > maxDim || height > maxDim) {
+              const ratio = Math.min(maxDim / width, maxDim / height);
+              width = Math.round(width * ratio);
+              height = Math.round(height * ratio);
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          };
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
     function normalizeState(rawObj) {
       if (!rawObj || typeof rawObj !== 'object') return structuredClone(DEFAULT_STATE);
       return {
@@ -372,8 +438,10 @@
     let state = loadLocalCache();
     let activeClientId = null;
     let adminUnlocked = false;
+    let cloudConnected = false;
 
     function setCloudBadge(connected, labelText) {
+      cloudConnected = connected;
       const badge = document.getElementById('cloudStatusBadge');
       if (!badge) return;
       if (connected) {
@@ -385,33 +453,36 @@
       }
     }
 
-    async function persistState(syncCloud = true) {
+    async function persistState(syncCloud = true, throwOnCloudError = false) {
       state = normalizeState(state);
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      } catch (e) {}
+      } catch (e) {
+        console.warn('LocalStorage quota warning:', e);
+      }
       applyBranding();
       refreshUIViews();
 
       if (syncCloud) {
         try {
-          await setDoc(portalDocRef, state, { merge: false });
+          await withTimeout(setDoc(portalDocRef, state, { merge: false }), 10000, 'Firestore write timed out');
           setCloudBadge(true, 'Firebase Sync Active');
         } catch (err) {
           console.error('Firestore write failed:', err);
-          setCloudBadge(false, 'Cloud Rule / Network Issue');
+          setCloudBadge(false, 'Check Firestore Rules');
+          if (throwOnCloudError) throw err;
         }
       }
     }
 
     async function initCloudSync() {
       try {
-        const snap = await getDoc(portalDocRef);
+        const snap = await withTimeout(getDoc(portalDocRef), 8000, 'Initial cloud read timed out');
         if (snap.exists()) {
           state = normalizeState(snap.data());
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
         } else {
-          await setDoc(portalDocRef, state);
+          await withTimeout(setDoc(portalDocRef, state), 8000, 'Initial cloud setup timed out');
         }
         setCloudBadge(true, 'Firebase Sync Active');
       } catch (err) {
@@ -474,7 +545,7 @@
         detail
       });
       if (state.logs.length > 200) state.logs.length = 200;
-      await persistState(true);
+      await persistState(true, false);
     }
 
     window.switchView = function(viewName) {
@@ -509,36 +580,49 @@
     window.handleClientVerify = async function(e) {
       e.preventDefault();
       const submitBtn = document.getElementById('verifySubmitBtn');
-      const passport = document.getElementById('passportInput').value.trim().toUpperCase();
+      const passport = normalizePassport(document.getElementById('passportInput').value);
       const mobile = document.getElementById('mobileInput').value.trim();
       const errEl = document.getElementById('verifyError');
 
       submitBtn.disabled = true;
       submitBtn.textContent = 'Verifying...';
+      errEl.classList.add('hidden');
 
+      let cloudReadError = null;
       try {
-        const snap = await getDoc(portalDocRef);
-        if (snap.exists()) state = normalizeState(snap.data());
-      } catch (err) {}
+        const snap = await withTimeout(getDoc(portalDocRef), 8000, 'Cloud connection timed out');
+        if (snap.exists()) {
+          state = normalizeState(snap.data());
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+          setCloudBadge(true, 'Firebase Sync Active');
+        }
+      } catch (err) {
+        cloudReadError = err;
+        console.error('Client cloud fetch error:', err);
+      }
 
       const found = state.clients.find(
-        (c) => String(c.passport || '').trim().toUpperCase() === passport && String(c.mobile || '').trim() === mobile
+        (c) => normalizePassport(c.passport) === passport && phonesMatch(c.mobile, mobile)
       );
 
       submitBtn.disabled = false;
       submitBtn.textContent = 'Verify & Access Documents';
 
       if (!found) {
-        errEl.textContent = 'No matching client record found for this Passport Number and Mobile Number.';
+        if (cloudReadError) {
+          errEl.textContent = 'Unable to reach Firebase Cloud database right now (check internet or Firestore Rules). Please try again.';
+        } else {
+          errEl.textContent = 'No matching client record found for this Passport Number and Mobile Number.';
+        }
         errEl.classList.remove('hidden');
-        await addLog('Failed Verification', `Passport: ${passport || 'N/A'}, Mobile: ${mobile || 'N/A'}`);
+        addLog('Failed Verification', `Passport: ${passport || 'N/A'}, Mobile: ${mobile || 'N/A'}`);
         return;
       }
 
       errEl.classList.add('hidden');
       activeClientId = found.id;
-      await addLog('Client Verified', `${found.fullName} (${found.passport})`);
       renderClientWorkspace(found);
+      addLog('Client Verified', `${found.fullName} (${found.passport})`);
     };
 
     window.logoutClient = function() {
@@ -595,7 +679,7 @@
       document.getElementById('blurCurtain').classList.add('hidden');
       document.getElementById('docViewerModal').classList.remove('hidden');
 
-      await addLog('Document Viewed', `${clientObj.fullName} (${clientObj.passport}) opened "${docItem.title}"`);
+      addLog('Document Viewed', `${clientObj.fullName} (${clientObj.passport}) opened "${docItem.title}"`);
       await renderWatermarkedCanvas(clientObj, docItem);
     };
 
@@ -625,7 +709,25 @@
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, width, height);
 
-      const fileSourceUrl = docItem.fileUrl || docItem.dataUrl || null;
+      let fileSourceUrl = docItem.fileUrl || docItem.dataUrl || null;
+
+      // Fetch from dedicated Firestore file vault if stored via cloud fallback
+      if (!fileSourceUrl && docItem.hasCloudFileData) {
+        try {
+          ctx.fillStyle = '#475569';
+          ctx.font = '600 16px Inter, sans-serif';
+          ctx.fillText('Loading protected document from cloud...', 40, 80);
+          const fileSnap = await withTimeout(getDoc(doc(db, 'portal_files', docItem.id)), 10000, 'File fetch timed out');
+          if (fileSnap.exists()) {
+            fileSourceUrl = fileSnap.data().dataUrl || null;
+            docItem.dataUrl = fileSourceUrl; // cache in memory for fast reopen
+          }
+        } catch (err) {
+          console.error('Error loading file from portal_files:', err);
+        }
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+      }
 
       if (docItem.type === 'image' && fileSourceUrl) {
         try {
@@ -650,7 +752,7 @@
           canvas.height = viewport.height;
           await page.render({ canvasContext: ctx, viewport }).promise;
         } catch (err) {
-          drawSummarySheet(ctx, canvas.width, canvas.height, clientObj, docItem, 'PDF preview fallback — verify Firebase Storage access.');
+          drawSummarySheet(ctx, canvas.width, canvas.height, clientObj, docItem, 'PDF preview fallback — verify cloud document access.');
         }
       } else {
         drawSummarySheet(ctx, width, height, clientObj, docItem);
@@ -726,11 +828,54 @@
       return bytes;
     }
 
-    async function uploadFileToFirebaseStorage(file, passport, docId) {
+    // Smart Dual-Engine File Upload:
+    // 1) Tries Firebase Storage with a strict 6s timeout
+    // 2) If Storage is blocked/unbilled/slow, automatically stores compressed image or PDF in dedicated Firestore document `portal_files/{docId}`
+    async function smartUploadDocumentFile(file, passport, docId, statusBox) {
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
       const safeName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-      const storageRef = ref(storage, `client_documents/${passport}/${docId}/${safeName}`);
-      await uploadBytes(storageRef, file);
-      return await getDownloadURL(storageRef);
+
+      // Attempt 1: Firebase Storage (fast 6-second timeout so it never hangs)
+      try {
+        if (statusBox) statusBox.textContent = 'Uploading file to cloud storage...';
+        const storageRef = ref(storage, `client_documents/${passport}/${docId}/${safeName}`);
+        await withTimeout(uploadBytes(storageRef, file), 6000, 'Storage timeout');
+        const url = await withTimeout(getDownloadURL(storageRef), 5000, 'URL fetch timeout');
+        return { fileUrl: url, hasCloudFileData: false };
+      } catch (storageErr) {
+        console.warn('Firebase Storage unavailable/slow, switching to Firestore Cloud Vault:', storageErr.message);
+      }
+
+      // Attempt 2: Automatic Firestore Cloud Vault Fallback (works on free Spark plan without Storage billing!)
+      if (statusBox) statusBox.textContent = 'Optimizing & syncing file directly to Firestore Cloud...';
+      let encodedDataUrl;
+      if (isPdf) {
+        if (file.size > 720 * 1024) {
+          throw new Error('PDF file is larger than 720 KB. Please compress the PDF under 700 KB or upload as JPG/PNG image.');
+        }
+        encodedDataUrl = await fileToDataUrl(file);
+      } else {
+        encodedDataUrl = await compressImageToDataUrl(file, 1300, 0.78);
+      }
+
+      if (encodedDataUrl.length > 980000) {
+        throw new Error('Encoded file exceeds 1 MB cloud limit. Please upload a smaller file.');
+      }
+
+      await withTimeout(
+        setDoc(doc(db, 'portal_files', docId), {
+          docId,
+          passport,
+          fileName: file.name,
+          mimeType: file.type || (isPdf ? 'application/pdf' : 'image/jpeg'),
+          dataUrl: encodedDataUrl,
+          createdAt: Date.now()
+        }),
+        10000,
+        'Cloud file save timed out'
+      );
+
+      return { fileUrl: null, hasCloudFileData: true };
     }
 
     window.openAdminGate = function() {
@@ -750,8 +895,8 @@
       if (pin === (state.company.adminPin || '1234')) {
         adminUnlocked = true;
         errEl.classList.add('hidden');
-        await addLog('Admin Unlocked', 'Administrator accessed control panel');
         switchView('adminDashboard');
+        addLog('Admin Unlocked', 'Administrator accessed control panel');
       } else {
         errEl.textContent = 'Invalid Administrator PIN. Please try again.';
         errEl.classList.remove('hidden');
@@ -780,7 +925,7 @@
       const statusBox = document.getElementById('adminUploadStatus');
 
       const fullName = document.getElementById('newClientName').value.trim();
-      const passport = document.getElementById('newClientPassport').value.trim().toUpperCase();
+      const passport = normalizePassport(document.getElementById('newClientPassport').value);
       const mobile = document.getElementById('newClientMobile').value.trim();
       const category = document.getElementById('newClientCategory').value.trim() || 'General';
       const status = document.getElementById('newClientStatus').value;
@@ -788,21 +933,32 @@
       const fileInput = document.getElementById('newDocFile');
       const file = fileInput.files && fileInput.files[0];
 
+      if (!fullName || !passport || !mobile) {
+        statusBox.className = 'rounded-xl bg-rose-50 border border-rose-200 text-rose-800 px-3.5 py-2 text-xs font-semibold';
+        statusBox.textContent = 'Please enter Full Name, Passport Number, and Mobile Number.';
+        statusBox.classList.remove('hidden');
+        return;
+      }
+
       saveBtn.disabled = true;
       saveBtn.textContent = 'Uploading to Firebase...';
+      statusBox.className = 'rounded-xl bg-sky-50 border border-sky-200 text-sky-800 px-3.5 py-2 text-xs font-semibold';
       statusBox.textContent = 'Saving client record and syncing with Firebase...';
       statusBox.classList.remove('hidden');
 
       try {
         const docId = 'doc-' + Date.now();
         let fileUrl = null;
+        let hasCloudFileData = false;
         let docType = 'summary';
         let fileName = 'Verified_Summary';
 
         if (file) {
           docType = (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) ? 'pdf' : 'image';
           fileName = file.name;
-          fileUrl = await uploadFileToFirebaseStorage(file, passport, docId);
+          const uploadResult = await smartUploadDocumentFile(file, passport, docId, statusBox);
+          fileUrl = uploadResult.fileUrl;
+          hasCloudFileData = uploadResult.hasCloudFileData;
         }
 
         const newDoc = {
@@ -811,12 +967,14 @@
           type: docType,
           fileName,
           fileUrl,
+          hasCloudFileData,
           uploadedAt: new Date().toISOString().slice(0, 10)
         };
 
-        let client = state.clients.find((c) => String(c.passport || '').toUpperCase() === passport);
+        let client = state.clients.find((c) => normalizePassport(c.passport) === passport);
         if (client) {
           client.fullName = fullName;
+          client.passport = passport;
           client.mobile = mobile;
           client.category = category;
           client.status = status;
@@ -843,14 +1001,18 @@
         });
         if (state.logs.length > 200) state.logs.length = 200;
 
-        await persistState(true);
+        statusBox.textContent = 'Finalizing cloud sync...';
+        await persistState(true, true);
+
         e.target.reset();
         document.getElementById('newClientCategory').value = 'Subclass 500 / RTS File';
-        statusBox.textContent = 'Saved to Firebase! Client can now verify from any mobile or device.';
-        setTimeout(() => statusBox.classList.add('hidden'), 3500);
+        statusBox.className = 'rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 px-3.5 py-2 text-xs font-semibold';
+        statusBox.textContent = 'Saved & Synced! Client can now verify immediately from any mobile or browser.';
+        setTimeout(() => statusBox.classList.add('hidden'), 4500);
       } catch (err) {
         console.error('Upload/save error:', err);
-        statusBox.textContent = 'Could not upload to Firebase Storage/Firestore. Check Firebase Console Rules & billing/CORS.';
+        statusBox.className = 'rounded-xl bg-rose-50 border border-rose-200 text-rose-800 px-3.5 py-2 text-xs font-semibold';
+        statusBox.textContent = `Error: ${err.message || 'Could not sync with Firebase. Check Firestore Rules.'}`;
       } finally {
         saveBtn.disabled = false;
         saveBtn.textContent = 'Save Client & Document';
@@ -888,6 +1050,14 @@
     }
 
     window.deleteClient = async function(clientId) {
+      const target = state.clients.find((c) => c.id === clientId);
+      if (target && Array.isArray(target.documents)) {
+        for (const d of target.documents) {
+          if (d.hasCloudFileData) {
+            deleteDoc(doc(db, 'portal_files', d.id)).catch(() => {});
+          }
+        }
+      }
       state.clients = state.clients.filter((c) => c.id !== clientId);
       state.logs.unshift({
         id: 'log-' + Date.now(),
@@ -895,12 +1065,16 @@
         action: 'Admin Deleted Client',
         detail: `Removed client ID ${clientId}`
       });
-      await persistState(true);
+      await persistState(true, false);
     };
 
     window.deleteDocument = async function(clientId, docId) {
       const c = state.clients.find((item) => item.id === clientId);
       if (!c) return;
+      const targetDoc = (c.documents || []).find((d) => d.id === docId);
+      if (targetDoc && targetDoc.hasCloudFileData) {
+        deleteDoc(doc(db, 'portal_files', docId)).catch(() => {});
+      }
       c.documents = (c.documents || []).filter((d) => d.id !== docId);
       state.logs.unshift({
         id: 'log-' + Date.now(),
@@ -908,7 +1082,7 @@
         action: 'Admin Deleted Document',
         detail: `Removed document ${docId} from ${c.fullName}`
       });
-      await persistState(true);
+      await persistState(true, false);
     };
 
     function populateBrandingForm() {
@@ -935,7 +1109,7 @@
           action: 'Admin Updated Branding',
           detail: `Company: ${state.company.name}`
         });
-        await persistState(true);
+        await persistState(true, false);
         const notice = document.getElementById('brandingSaveNotice');
         notice.classList.remove('hidden');
         setTimeout(() => notice.classList.add('hidden'), 3000);
@@ -943,12 +1117,10 @@
 
       if (logoFile) {
         try {
-          const uploadedLogoUrl = await uploadFileToFirebaseStorage(logoFile, 'BRANDING', 'logo');
-          await commit(uploadedLogoUrl);
+          const compressedLogo = await compressImageToDataUrl(logoFile, 400, 0.85);
+          await commit(compressedLogo);
         } catch (err) {
-          const reader = new FileReader();
-          reader.onload = async () => await commit(reader.result);
-          reader.readAsDataURL(logoFile);
+          await commit(null);
         }
       } else {
         await commit(null);
@@ -974,7 +1146,7 @@
 
     window.clearAccessLogs = async function() {
       state.logs = [];
-      await persistState(true);
+      await persistState(true, false);
     };
 
     window.exportDatabaseJSON = function() {
@@ -989,7 +1161,7 @@
 
     window.resetDemoData = async function() {
       state = structuredClone(DEFAULT_STATE);
-      await persistState(true);
+      await persistState(true, false);
       populateBrandingForm();
     };
 
